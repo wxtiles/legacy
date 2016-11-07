@@ -72,6 +72,17 @@ function zer0(str){
     return str;
 }
 
+function jsonload(url){
+    var xobj = new XMLHttpRequest();
+    xobj.overrideMimeType("application/json");
+    xobj.open('GET', url, false);
+    xobj.send(null);
+    if (xobj.status == "200"){
+        var obj=JSON.parse(xobj.responseText);
+    }
+    return obj;
+}
+
 extendTo = function(destination, source) {
     destination = destination || {};
     if(source) {
@@ -187,7 +198,7 @@ _WXTiles = {
 
   initialize: function(apikey,options) {
     this._url=_WXROOTURL;
-    this.apikey=key;
+    this.apikey=apikey;
     extendTo(this,options);
     this._url=this._url.replace(/\/$/, "")
     this._srv=this._url;
@@ -208,49 +219,12 @@ _WXTiles = {
     this.alltimes=[];
     this.views={};
     this.setVisibility(false);
-    this._init();
+    this._loadinit();
   },
   _loadinit: function(){
-    var that=this;
-    initfunc=function(data){
-        that._init(data);
-    }
-    eval(this.callback+'=initfunc;');
-    this.isinit=false;
-    var oldscript=document.getElementById(this.callback);
-    if (oldscript) oldscript.parentNode.removeChild(oldscript);
-  
-    function getScript(source, callback) {
-        var script = document.createElement('script');
-        var prior = document.getElementsByTagName('script')[0];
-        script.async = 1;
-        script.id = this.callback;
-        prior.parentNode.insertBefore(script, prior);
-
-        script.onload = script.onreadystatechange = function( _, isAbort ) {
-            if(isAbort || !script.readyState || /loaded|complete/.test(script.readyState) ) {
-                script.onload = script.onreadystatechange = null;
-                script = undefined;
-
-                if(!isAbort) { if(callback) callback(); }
-            }
-        };
-
-        script.src = source;
-    }
-    getScript( this._url+'/tile/init?callback='+this.callback+'&domain='+window.location.hostname, this._checkinit.bind(this) );
-  },
-  _checkinit: function() {
-     if (!this.isinit) {
-        // Sometimes the server errors 500 in the middle of returning the callback function.
-        // This seems to be always transient, so reinit when it happens.
-        if (this._loadinitcount < 5) {
-            this._loadinitcount++;
-            console.log("RETRY", this._loadinitcount, this);
-            setTimeout(this._loadinit.bind(this), 1000);
-        }
-     }
-  },
+    obj=jsonload(_WXROOTURL+'layer');
+    this._init(obj);
+  },  
   _init: function(datalist){
     if (!this.isinit){
       if (!(datalist instanceof Array)) {
@@ -259,30 +233,36 @@ _WXTiles = {
       this._serverlist={};
       this._cyclelist={};
       this.views={};
+      this.layerid={};
+      this.instid={};
       this.times={};
       this.defalpha={};
       this._timekey={};
+      var new_ids=[];
       for (i=0;i<datalist.length;i++) {
-        var data=datalist[i];
-	    for (a in data.views) this.views[a]=data.views[a];
-	    for (a in data.times) this.times[a]=data.times[a];
-	  if (data.defalpha) {
-          for (a in data.defalpha) this.defalpha[a]=data.defalpha[a];
-        }
-	  if (data.timekey) {
-          for (a in data.timekey) this._timekey[a]=data.timekey[a];
-        }
-        var server= ((data.server) ? data.server : this._url).replace(/\/$/g, "");
-        for (v in data.views) {
-            this._serverlist[v]=server;
-            this._cyclelist[v]=data.cycle;
+        new_ids.push(datalist[i].id);
+      }
+      for (a in LAYER_IDS){
+        var ids=new_ids.indexOf(LAYER_IDS[a]);
+        if (ids<0) continue;
+        var instances=datalist[ids].instances;
+        if (instances.length<1) continue;
+        this.views[a]=LAYER_DESCRIPTIONS[a];
+        this.layerid[a]=new_ids[ids];
+        this.instid[a]=instances.pop()['id'];
+        this.defalpha[a]=LAYER_DEFALPHA[a];
+        this.times[a]=jsonload(_WXROOTURL+'layer/'+this.layerid[a]+'/instance/'+this.instid[a]+'/times/');
+	    var server=_WXROOTURL;
+        for (v in this.views) {
+          this._serverlist[v]=server;
+          this._cyclelist[v]=this.instid[v];
         }
       }
       for (v in this.times) {
         for (i=0;i<this.times[v].length;i++){
           var timestamp=this.times[v][i];
           if (!this._timekey[timestamp]) {
-            this.times[v][i]=new Date(timestamp.replace(' ','T')+'Z').valueOf();
+            this.times[v][i]=new Date(timestamp).valueOf();
           }
         }
       }
@@ -333,7 +313,7 @@ _WXTiles = {
     }
     this._setURL();
     this._updateOpacity();
-    if (this.colorBar) this.colorBar.update(this.hidden ? 'none' : this.cview,this._srv+'/colorbar');
+    if (this.colorBar) this.colorBar.update(this.hidden ? 'none' : this.cview,this.ctime);
     this.redraw();
   },
   _setURL: function(){
@@ -373,13 +353,13 @@ _WXTiles = {
      colorbar {<WXColorBar>} The new WXColorBar object
      */
   addColorBar: function(size,orient,position){
-    var thesize=size ? size : 'big'
-    var theorient=orient ? orient : 'horiz'
+    var thesize=size ? size : 'large'
+    var theorient=orient ? orient : 'horizontal'
     this.colorBar=new WXColorBar({size:thesize,orientation:theorient,location:position});
     if (this.map) {
         this.colorBar.addToMap(this.map);
     }
-    this.colorBar.update(this.cview,this._srv);
+    this.colorBar.update(this.cview,this.ctime);
     return this.colorBar;
   },
   /*
@@ -565,7 +545,7 @@ _WXTiles = {
             this.strtime=this.ctime;    //This allows arbitary time indices for timekey option. Pre 1970 dates will not work though!
         }else{
             var newdate=new Date(this.ctime);
-            this.strtime=newdate.wxformat('%Y%m%d_%Hz');
+            this.strtime=newdate.wxformat('%Y-%m-%dT%H:%M:%SZ');
         }
     }
     if (this.linklayers && !_linked) {
@@ -725,12 +705,12 @@ _WXColorBar = {
     Property: size
     {String}  'big' or 'small'
 */
-    size:'big',
+    size:'large',
 /*
     Property: orientation
     {String}  'horiz' or 'vert'
 */
-    orientation:'horiz',
+    orientation:'horizontal',
 /*
     Property: location
     {String}  One of 'TopRight','TopLeft',BottomRight','BottomLeft'
@@ -751,7 +731,7 @@ _WXColorBar = {
 */
     initialize: function(options){
       extendTo(this,options);
-      this.imurl='{url}/{v}/'+this.size+'/'+this.orientation;
+      this.imurl=_WXROOTURL+'legend/{v}/{inst}/'+this.size+'/'+this.orientation;
     },
 /*
     Method: update
@@ -791,14 +771,14 @@ _WXColorBar = {
      removeFromMap: function(){
        //overridden by derived types
      },
-     update: function(aview,url){
+     update: function(aview,inst){
         if (!this.div) return;
         if (!aview) aview=this.cview;
         this.cview=aview;
-        if (aview=='none' || url == _WXROOTURL) {
+        if (aview=='none') {
             this.div.style.display='none';   
         }else{
-            this.div.innerHTML='<img class="wxcolorbar" src="'+this.imurl.replace(/{v}/g,aview).replace(/{url}/g,url)+'" />';
+            this.div.innerHTML='<img class="wxcolorbar" src="'+this.imurl.replace(/{v}/g,LAYER_IDS[aview]).replace(/{inst}/g,inst)+'" />';
             this.div.style.display='block'; 
         }
     }
@@ -808,7 +788,7 @@ if (typeof(OpenLayers)!="undefined"){
     WXTiles=OpenLayers.Class(OpenLayers.Layer.TMS,_WXTiles,{
 	mapz0:0,
         initialize:function(options){
-            var name=(options && options['name']) ? options.name : 'WXTiles Overlay'
+            var name=(options && options.name) ? options.name : 'WXTiles Overlay';
             OpenLayers.Layer.TMS.prototype.initialize.apply(this, [name,'',options]);
             _WXTiles.initialize.apply(this,[options]);
         },
@@ -821,7 +801,7 @@ if (typeof(OpenLayers)!="undefined"){
               var zmod=Math.pow(2,z);
               x=((x%zmod)+zmod)%zmod;
               var y = Math.round((bounds.bottom - this.tileOrigin.lat) / (res * this.tileSize.h));
-                 return this._srv+'/tile/'+this._cyclelist[this.cview]+"/"+this.instance_path[this.cview]+"/"+this.strtime+"/"+z + "/" + x + "/" + y + this.ext;
+                 return this._srv+'tile/'+this.layerid[this.cview]+"/"+this.instid[this.cview]+"/"+this.strtime+"/0/"+z + "/" + x + "/" + y + this.ext;
             } else {
               return this._url+"/images/none.png";
             }
@@ -938,7 +918,7 @@ else if (typeof(google)!="undefined"){
                 //convert google tile format into server format
                 var zmod=Math.pow(2,z);
                 var y=zmod-1-pos.y
-                return this._srv+'/tile/'+this._cyclelist[this.cview]+"/"+this.instance_path[this.cview]+"/"+this.strtime+"/"+z + "/" + x + "/" + y + this.ext;
+                return this._srv+'tile/'+this.layerid[this.cview]+"/"+this.instid[this.cview]+"/"+this.strtime+"/0/"+z + "/" + x + "/" + y + this.ext;
             } else {
               return this._url+"/images/none.png";
             }
@@ -953,6 +933,7 @@ else if (typeof(google)!="undefined"){
             return this.map.getZoom();  
         },
         redraw: function(){
+            if (!this.map) return;
             var zoom=this.map.getZoom();
             if ((zoom-1) >= this.map.minZoom) {
 				this.map.setZoom(zoom-1);
