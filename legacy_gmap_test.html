@@ -16,17 +16,17 @@
 				mapTypeId: google.maps.MapTypeId.ROADMAP
 			};
 			var map = new google.maps.Map(document.getElementById("map"),options);
-		
+
 			var satoverlay=new WXTiles({withnone:true,autoupdate:true,cview:'satir'});
 			var wxoverlay=new WXTiles({withnone:true,autoupdate:true,cview:'rain'});
 			wxoverlay.addToMap(map);
 			satoverlay.addToMap(map);
-			wxoverlay.addColorBar('big','horiz');
-		
+			wxoverlay.addColorBar('small','horizontal');
+
 			document.getElementById('tSelect').appendChild(wxoverlay.getTSelect());
 			document.getElementById('wxSelect').appendChild(wxoverlay.getVSelect());
 			document.getElementById('satSelect').appendChild(satoverlay.getVSelect());
-		
+
 			wxoverlay.linkTime(satoverlay);
 			return map;
     }

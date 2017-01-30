@@ -29,14 +29,14 @@
 		    map.addLayers([baselayer]);
 		    wxoverlay.addToMap(map);
 		    satoverlay.addToMap(map);
-		    wxoverlay.addColorBar('small','horiz');
+		    wxoverlay.addColorBar('small','horizontal');
 
 		    document.getElementById('tSelect').appendChild(wxoverlay.getTSelect());
 				document.getElementById('wxSelect').appendChild(wxoverlay.getVSelect());
 				document.getElementById('satSelect').appendChild(satoverlay.getVSelect());
-    
+
 		    wxoverlay.linkTime(satoverlay);
-    
+
 				map.addControl(new OpenLayers.Control.PanZoomBar());
 				map.addControl(new OpenLayers.Control.NavToolbar());
 				map.addControl(new OpenLayers.Control.KeyboardDefaults());
@@ -50,7 +50,7 @@
       }
   </script>
   </head>
-  
+
   <body onload="make();">
   <div id="header">
     <form name="map_controls">
