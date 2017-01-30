@@ -45,9 +45,7 @@ var LAYER_DEFALPHA={"hs":1,"tp":1,"wind":0.6,"rain":0.75,"tmp":0.6,"sst":1,"hs":
 var init=null;
 
 var t = document.getElementsByTagName("script");
-// var _WXROOTURL="http://api.wxtiles.com/v0/wxtiles/";
-// var _WXROOTURL="http://api.wxtiles.com/v1/wxtiles/";
-var _WXROOTURL="http://172.16.1.50/v1/wxtiles/";
+var _WXROOTURL="http://api.wxtiles.com/v1/wxtiles/";
 
 
 var gsMonthNames = new Array('January','February','March','April','May','June','July','August','September','October','November','December');
