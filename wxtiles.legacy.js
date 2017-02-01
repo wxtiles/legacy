@@ -11,9 +11,9 @@ var LAYER_IDS={
     'rain':'ncep-gfs-global-rain',
     'tmp':'ncep-gfs-global-temp-2m',
     'sst':'sat-sst',
-    'satenh':'nogood',
-    'satir':'nogood',
-    'satvis':'nogood'
+    'satenh':'global-enhanced-ir',
+    'satir':'global-ir',
+    'satvis':'global-vis'
 };
 
 var STYLE_IDS={
@@ -23,9 +23,9 @@ var STYLE_IDS={
   'rain':'precip-compose',
   'tmp':'temperature-metric',
   'sst':'sst',
-  'satenh':'nogood',
-  'satir':'nogood',
-  'satvis':'nogood'
+  'satenh':'infrared-dtmp',
+  'satir':'infrared',
+  'satvis':'sat-visible'
 }
 
 var LAYER_DESCRIPTIONS={
