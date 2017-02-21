@@ -5,16 +5,28 @@ Version: 2.0
 */
 
 var LAYER_IDS={
-    'hs':'ncep-mww3-global-hs-si',
-    'tp':'ncep-mww3-global-tp-si',
-    'wind':'ncep-gfs-global-wind-knots',
-    'rain':'ncep-gfs-global-rain-uscs',
-    'tmp':'ncep-gfs-global-temp-2m-si',
-    'sst':'nogood',
-    'satenh':'nogood',
-    'satir':'nogood',
-    'satvis':'nogood'
+    'hs':'ncep-mww3-global-hs',
+    'tp':'ncep-mww3-global-tp',
+    'wind':'ncep-gfs-global-wind10m',
+    'rain':'ncep-gfs-global-precip',
+    'tmp':'ncep-gfs-global-temp2m',
+    'sst':'nasa-sat-global-sst',
+    'satenh':'composite-sat-global-enhancedir',
+    'satir':'composite-sat-global-ir',
+    'satvis':'composite-sat-global-vis'
 };
+
+var STYLE_IDS={
+  'hs':'hs-si',
+  'tp':'wave-period',
+  'wind':'wind-speed-direction-msl-classic',
+  'rain':'precip-compose',
+  'tmp':'temperature-metric',
+  'sst':'sst',
+  'satenh':'infrared-dtmp',
+  'satir':'infrared',
+  'satvis':'sat-visible'
+}
 
 var LAYER_DESCRIPTIONS={
     "hs":"Wave height",
@@ -33,7 +45,7 @@ var LAYER_DEFALPHA={"hs":1,"tp":1,"wind":0.6,"rain":0.75,"tmp":0.6,"sst":1,"hs":
 var init=null;
 
 var t = document.getElementsByTagName("script");
-var _WXROOTURL="http://api.wxtiles.com/v0/wxtiles/";
+var _WXROOTURL="http://api.wxtiles.com/v1/wxtiles/";
 
 
 var gsMonthNames = new Array('January','February','March','April','May','June','July','August','September','October','November','December');
@@ -72,9 +84,17 @@ function zer0(str){
     return str;
 }
 
-function jsonload(url){
+function jsonload(url, apikey){
     var xobj = new XMLHttpRequest();
     xobj.overrideMimeType("application/json");
+    // xobj.setRequestHeader("apikey", apikey);
+    // http://stackoverflow.com/questions/17052141/modiying-request-headers-in-an-xmlhttprequest
+    // http://stackoverflow.com/questions/17195402/xmlhttprequest-firefox-issue-when-setrequestheader
+    var xhr_open_base = xobj.open;
+    xobj.open = function (method, url, async, user, password) {
+      xhr_open_base.apply(this, arguments);
+      xobj.setRequestHeader("apikey", apikey);
+    }
     xobj.open('GET', url, false);
     xobj.send(null);
     if (xobj.status == "200"){
@@ -112,7 +132,7 @@ Object.keys = Object.keys || function(o) {
     return result;
 };
 
-if (!Array.prototype.indexOf) { 
+if (!Array.prototype.indexOf) {
     Array.prototype.indexOf = function(obj, start) {
          for (var i = (start || 0), j = this.length; i < j; i++) {
              if (this[i] === obj) { return i; }
@@ -167,23 +187,23 @@ _WXTiles = {
 */
   withnone:false,
   toff:-99,
-  
+
   type:'',
   linklayers:false,
   buffer:0,
 /*
   property: updateCallback
   {Function}     Callback triggered when layer is updated.
-  
-  The scope of 'this' within the callback function is the WXTiles layer object. 
-*/  
+
+  The scope of 'this' within the callback function is the WXTiles layer object.
+*/
   updateCallback:null,
 /*
   property: vorder
   {Array}     Views in the layer and order of views shown on select control. Default is all <WXTiles views>
-*/  
-  
-  
+*/
+
+
   vorder:[],
   attribution:'<div><a target="_blank" href="http://www.wxtiles.com"><img src="http://www.wxtiles.com/images/wxtiles_48.png" /><br><span>WXTiles</span></a></div>',
 /*
@@ -191,16 +211,15 @@ _WXTiles = {
 
     Parameters:
     url - {String}
-    options - {Object} Hashtable of extra options to tag onto the layer. 
+    options - {Object} Hashtable of extra options to tag onto the layer.
 	      Any property value can be specified as an option.
 */
-  key: null,
+  apikey: null,
 
-  initialize: function(apikey,options) {
+  initialize: function(options) {
     this._url=_WXROOTURL;
-    this.apikey=apikey;
     extendTo(this,options);
-    this._url=this._url.replace(/\/$/, "")
+    this._url=this._url.replace(/\/$/, "");// + "?apikey=" + this.apikey;
     this._srv=this._url;
     this.lastinit=new Date();
     this._loadinitcount=0;
@@ -214,6 +233,7 @@ _WXTiles = {
     }
     this.times={};
     this._timekey={};
+    this.apikey=(options && options.apikey) ? options.apikey : undefined;
     this.alpha=(options && options.alpha) ? options.alpha : {};
     this.meta={};
     this.alltimes=[];
@@ -222,9 +242,9 @@ _WXTiles = {
     this._loadinit();
   },
   _loadinit: function(){
-    obj=jsonload(_WXROOTURL+'layer');
+    obj=jsonload(_WXROOTURL+'layer', this.apikey);
     this._init(obj);
-  },  
+  },
   _init: function(datalist){
     if (!this.isinit){
       if (!(datalist instanceof Array)) {
@@ -234,6 +254,7 @@ _WXTiles = {
       this._cyclelist={};
       this.views={};
       this.layerid={};
+      this.styles={};
       this.instid={};
       this.times={};
       this.defalpha={};
@@ -248,11 +269,12 @@ _WXTiles = {
         var instances=datalist[ids].instances;
         if (instances.length<1) continue;
         this.views[a]=LAYER_DESCRIPTIONS[a];
+        this.styles[a]=STYLE_IDS[a];
         this.layerid[a]=new_ids[ids];
         this.instid[a]=instances.pop()['id'];
         this.defalpha[a]=LAYER_DEFALPHA[a];
-        this.times[a]=jsonload(_WXROOTURL+'layer/'+this.layerid[a]+'/instance/'+this.instid[a]+'/times/');
-	    var server=_WXROOTURL;
+        this.times[a]=jsonload(_WXROOTURL+'layer/'+this.layerid[a]+'/instance/'+this.instid[a]+'/times/', this.apikey);
+	      var server=_WXROOTURL;
         for (v in this.views) {
           this._serverlist[v]=server;
           this._cyclelist[v]=this.instid[v];
@@ -313,7 +335,7 @@ _WXTiles = {
     }
     this._setURL();
     this._updateOpacity();
-    if (this.colorBar) this.colorBar.update(this.hidden ? 'none' : this.cview,this.ctime);
+    if (this.colorBar) this.colorBar.update(this.hidden ? 'none' : this.cview,this.style);
     this.redraw();
   },
   _setURL: function(){
@@ -328,13 +350,13 @@ _WXTiles = {
   /*
   Method: addToMap
      Add to a map
-            
+
      Parameters:
         map {Map Object}   OpenLayers or GoogleMaps Map object
-                              
+
      Returns:
         {Null}
-        
+
     Note: WXTiles may reset the map properties to ensure the tiles overlay correctly
  */
   addToMap: function(map){
@@ -343,32 +365,32 @@ _WXTiles = {
   /*
   Method: addColorBar
      Add a color bar to the map
-      
+
      Parameters:
-     size {String}	(optional) Colorbar size 'big'(default) or 'small'
-     orient {String}	(optional) Orientation 'horiz'(default) or 'vert'
+     size {String}	(optional) Colorbar size 'small'(default) or 'large'
+     orient {String}	(optional) Orientation 'horizontal'(default) or 'vertical'
      position {String}  (optional) One of 'TopRight'(default),'TopLeft',BottomRight','BottomLeft'
-      
+
      Returns:
      colorbar {<WXColorBar>} The new WXColorBar object
      */
   addColorBar: function(size,orient,position){
-    var thesize=size ? size : 'large'
+    var thesize=size ? size : 'small'
     var theorient=orient ? orient : 'horizontal'
-    this.colorBar=new WXColorBar({size:thesize,orientation:theorient,location:position});
+    this.colorBar=new WXColorBar({size:thesize,orientation:theorient,location:position,apikey:this.apikey});
     if (this.map) {
         this.colorBar.addToMap(this.map);
     }
-    this.colorBar.update(this.cview,this.ctime);
+    this.colorBar.update(this.cview,this.style);
     return this.colorBar;
   },
   /*
   Method: getVSelect
      Get a select control to change the overlay view
-     
+
      Parameters:
      views {Array}      (optional) An array of views to include in the Select control. Defaults to <WXTiles.vorder>.
-     
+
      Returns:
      vselect {Select}   A select control
   */
@@ -378,11 +400,11 @@ _WXTiles = {
   /*
   Method: getTSelect
      Get a select control to change the time shown in the overlay
-     
+
      Parameters:
      ctime {Javascript date/time}      (optional) The initially selected time - pass null for default
-     format {String}                   (optional) The format to be used for time in C language convention 
-     
+     format {String}                   (optional) The format to be used for time in C language convention
+
      Returns:
      tselect {Select}   A select control
   */
@@ -392,10 +414,10 @@ _WXTiles = {
    /*
   Method: linkTime
      Link time setting with another WXTiles layer
-      
+
      Parameters:
      layer {<WXTiles>}	Layer to link to
-      
+
      Returns:
      {Null}
      */
@@ -418,7 +440,7 @@ _WXTiles = {
   /*
  Method: show
     Show the layer (undo hide).
- 
+
     Returns:
     {Null}
   */
@@ -429,11 +451,11 @@ _WXTiles = {
   /*
   Method: getTimes
      Get the times for one or all forecast views
-      
+
      Parameters:
      aview {String/Boolean}	Get times for view aview. To get times for all, omit or set to false
      link {Boolean}		nclude times from linked layers
-      
+
      Returns:
      {Array} An array of Javascript Date/Time values
      */
@@ -461,11 +483,11 @@ _WXTiles = {
   /*
   Method: getTimeKeys
      Get the time keys and their values for one or all forecast views
-      
+
      Parameters:
      aview {String/Boolean}	Get times for view aview. To get times for all, omit or set to false
-     link {Boolean}		nclude times from linked layers
-      
+     link {Boolean}	Include times from linked layers
+
      Returns:
      {Object} A hash of key:value pairs
      */
@@ -485,7 +507,7 @@ _WXTiles = {
   /*
   Method: getViews
      Get the forecast views in the layer
-      
+
      Returns:
      {Object} A hash of key:Name pairs of views available in the WXTiles layer
      */
@@ -495,16 +517,17 @@ _WXTiles = {
 /*
   Method: setView
      Set currently displayed forecast view
-      
+
      Parameters:
      newview {String} New view to set layer to
-      
+
      Returns:
      cview {String} The new view the layer is set on
      */
   setView: function(newv){
-    if (this.views[newv]){ 
+    if (this.views[newv]){
       this.cview=newv;
+      this.style=STYLE_IDS[newv];
       this._update();
       return this.cview;
     }
@@ -513,11 +536,11 @@ _WXTiles = {
 /*
   Method: setTime
      Set currently displayed forecast time
-      
+
      Parameters:
      newtime {Javascript date/time}	New time to set layer to
      link {Boolean}		Include times from linked layers
-      
+
      Returns:
      ctime {Javascript date/time} The new time the layer is set on
      */
@@ -538,7 +561,7 @@ _WXTiles = {
           if (this.alltimes[i+1]>newtime) {
             newtime=this.alltimes[i];
             break;
-          }  
+          }
         }
         this.ctime=newtime;
         if (typeof(this.ctime)=='string'){
@@ -559,10 +582,10 @@ _WXTiles = {
 /*
   Method: setToffset
      Set time offset from UTC
-      
+
      Parameters:
      toff {Float} Local time offset from UTC in hours (+ve values for east of Greenwich)
-      
+
      Returns:
      {Null}
      */
@@ -573,11 +596,11 @@ _WXTiles = {
 /*
   Method: setAlpha
      Set alpha transparency of layer
-      
+
      Parameters:
      alpha {Float} Alpha value between 0 (transparent) and 1 (opaque)
      view {String} (Optional) Layer to set transparency for - default current layer
-      
+
      }
      Returns:
      {Null}
@@ -641,12 +664,12 @@ _WXTiles = {
    /*
   Method: addToMap
      Add to a map
-      
+
      Parameters:
      map {Map Object}	OpenLayers or GoogleMaps Map object
-      
+
      Returns:
-     {Null} 
+     {Null}
      */
   addToMap: function(map){
     //overridden by derived types
@@ -654,9 +677,9 @@ _WXTiles = {
   /*
   Method: removeFromMap
      Remove layer from its map
-      
+
      Returns:
-     {Null} 
+     {Null}
 
      Note: this does not destroy the layer
      */
@@ -668,12 +691,12 @@ _WXTiles = {
      Show or hide layer
      Note that this is not a permanent state change will be reset when time or view altered.
      Use hide() to permanently hide layer.
-      
+
      Parameters:
      vis {Boolean}	Show layer (true) or hide layer (false)
-      
+
      Returns:
-     {Null} 
+     {Null}
      */
   setVisibility: function(vis){
     //overridden by derived types
@@ -681,9 +704,9 @@ _WXTiles = {
   /*
   Method: getMetaData
      Get meta data associated with current visible layer
-      
+
      Returns:
-     metadata {String} 
+     metadata {String}
      */
   getMetaData: function(){
     if (this.cview=='None') {
@@ -703,12 +726,12 @@ _WXColorBar = {
     id:'WXColorBar',
 /*
     Property: size
-    {String}  'big' or 'small'
+    {String}  'large' or 'small'
 */
-    size:'large',
+    size:'small',
 /*
     Property: orientation
-    {String}  'horiz' or 'vert'
+    {String}  'horizontal' or 'vertical'
 */
     orientation:'horizontal',
 /*
@@ -718,6 +741,7 @@ _WXColorBar = {
     location:null,
     mpos:['TopRight','TopLeft','BottomRight','BottomLeft'],
     cview:null,
+    apikey:null,
 /*
     Constructor: WXColorBar
 
@@ -725,13 +749,13 @@ _WXColorBar = {
     url - {String}  URL of the wxtiles server
     options - {Object} Hashtable of extra options to tag onto the layer. Any property value can be specified as an option. For the OpenLayers API, any valid option for the OpenLayers.Layer.TMS class can also be included.
 
-    
+
     Notes:
     Usually called internally by <WXTiles.addColorBar>
 */
     initialize: function(options){
       extendTo(this,options);
-      this.imurl=_WXROOTURL+'legend/{v}/{inst}/'+this.size+'/'+this.orientation;
+      this.imurl=_WXROOTURL+'legend/{v}/{s}/'+this.size+'/'+this.orientation+'.png?apikey='+this.apikey;
     },
 /*
     Method: update
@@ -739,7 +763,8 @@ _WXColorBar = {
 
     Parameters:
     aview {String}:	Variable to show in colorbar
-    
+    styl {String}: Style for the variagble
+
     Returns:
     {Null}
 
@@ -749,12 +774,12 @@ _WXColorBar = {
     /*
      Method: addToMap
         Add to a map
-         
+
         Parameters:
         map {Map Object}	OpenLayers or GoogleMaps Map object
-         
+
         Returns:
-        {Null} 
+        {Null}
         */
      addToMap: function(map){
        //overridden by derived types
@@ -762,24 +787,24 @@ _WXColorBar = {
      /*
      Method: removeFromMap
         Remove layer from its map
-         
+
         Returns:
-        {Null} 
-   
+        {Null}
+
         Note: this does not destroy the colorbar object
     */
      removeFromMap: function(){
        //overridden by derived types
      },
-     update: function(aview,inst){
+     update: function(aview,styl){
         if (!this.div) return;
         if (!aview) aview=this.cview;
         this.cview=aview;
         if (aview=='none') {
-            this.div.style.display='none';   
+            this.div.style.display='none';
         }else{
-            this.div.innerHTML='<img class="wxcolorbar" src="'+this.imurl.replace(/{v}/g,LAYER_IDS[aview]).replace(/{inst}/g,inst)+'" />';
-            this.div.style.display='block'; 
+            this.div.innerHTML='<img class="wxcolorbar" src="'+this.imurl.replace(/{v}/g,LAYER_IDS[aview]).replace(/{s}/g,styl)+'" />';
+            this.div.style.display='block';
         }
     }
 }
@@ -801,7 +826,7 @@ if (typeof(OpenLayers)!="undefined"){
               var zmod=Math.pow(2,z);
               x=((x%zmod)+zmod)%zmod;
               var y = Math.round((bounds.bottom - this.tileOrigin.lat) / (res * this.tileSize.h));
-                 return this._srv+'tile/'+this.layerid[this.cview]+"/"+this.instid[this.cview]+"/"+this.strtime+"/0/"+z + "/" + x + "/" + y + this.ext;
+                 return this._srv+'tile/'+this.layerid[this.cview]+"/"+this.styles[this.cview]+"/"+this.instid[this.cview]+"/"+this.strtime+"/0/"+z + "/" + x + "/" + y + this.ext + "?apikey=" + this.apikey;
             } else {
               return this._url+"/images/none.png";
             }
@@ -811,7 +836,7 @@ if (typeof(OpenLayers)!="undefined"){
             _WXTiles._update.apply(this);
         },
         _getZoom: function(){
-            return this.map.getZoom();  
+            return this.map.getZoom();
         },
         _setOpacity: function(opacity){
             this.setOpacity(opacity);
@@ -918,7 +943,7 @@ else if (typeof(google)!="undefined"){
                 //convert google tile format into server format
                 var zmod=Math.pow(2,z);
                 var y=zmod-1-pos.y
-                return this._srv+'tile/'+this.layerid[this.cview]+"/"+this.instid[this.cview]+"/"+this.strtime+"/0/"+z + "/" + x + "/" + y + this.ext;
+                return this._srv+'tile/'+this.layerid[this.cview]+"/"+this.styles[this.cview]+"/"+this.instid[this.cview]+"/"+this.strtime+"/0/"+z + "/" + x + "/" + y + this.ext + "?apikey=" + this.apikey;
             } else {
               return this._url+"/images/none.png";
             }
@@ -930,7 +955,7 @@ else if (typeof(google)!="undefined"){
             this.calpha=alpha;
         },
         _getZoom: function(){
-            return this.map.getZoom();  
+            return this.map.getZoom();
         },
         redraw: function(){
             if (!this.map) return;
@@ -990,7 +1015,7 @@ else if (typeof(google)!="undefined"){
         this.div.style.padding = '4px';
         this.div.index = 1;
     }
-    
+
     WXColorBar=function(options){
         var obj=new GMWXColorBar();
         extendTo(obj,_WXColorBar);
