@@ -10,6 +10,7 @@
     <script src="wxtiles.legacy.js" type="text/javascript" ></script>
     <script type="text/javascript">
 		function add_gm_wxtiles(){
+      var apikey = undefined; // <<-- NOTE to be filled in
 			var options = {
 				zoom: 4,
 				center: new google.maps.LatLng(40, 0),
@@ -17,8 +18,8 @@
 			};
 			var map = new google.maps.Map(document.getElementById("map"),options);
 
-			var satoverlay=new WXTiles({withnone:true,autoupdate:true,cview:'satir'});
-			var wxoverlay=new WXTiles({withnone:true,autoupdate:true,cview:'rain'});
+			var satoverlay=new WXTiles({apikey: apikey, withnone:true,autoupdate:true,cview:'satir'});
+			var wxoverlay=new WXTiles({apikey: apikey, withnone:true,autoupdate:true,cview:'rain'});
 			wxoverlay.addToMap(map);
 			satoverlay.addToMap(map);
 			wxoverlay.addColorBar('small','horizontal');

@@ -7,13 +7,13 @@ Version: 2.0
 var LAYER_IDS={
     'hs':'ncep-mww3-global-hs',
     'tp':'ncep-mww3-global-tp',
-    'wind':'ncep-gfs-global-wind',
-    'rain':'ncep-gfs-global-rain',
-    'tmp':'ncep-gfs-global-temp-2m',
-    'sst':'sat-sst',
-    'satenh':'global-enhanced-ir',
-    'satir':'global-ir',
-    'satvis':'global-vis'
+    'wind':'ncep-gfs-global-wind10m',
+    'rain':'ncep-gfs-global-precip',
+    'tmp':'ncep-gfs-global-temp2m',
+    'sst':'nasa-sat-global-sst',
+    'satenh':'composite-sat-global-enhancedir',
+    'satir':'composite-sat-global-ir',
+    'satvis':'composite-sat-global-vis'
 };
 
 var STYLE_IDS={
@@ -84,9 +84,17 @@ function zer0(str){
     return str;
 }
 
-function jsonload(url){
+function jsonload(url, apikey){
     var xobj = new XMLHttpRequest();
     xobj.overrideMimeType("application/json");
+    // xobj.setRequestHeader("apikey", apikey);
+    // http://stackoverflow.com/questions/17052141/modiying-request-headers-in-an-xmlhttprequest
+    // http://stackoverflow.com/questions/17195402/xmlhttprequest-firefox-issue-when-setrequestheader
+    var xhr_open_base = xobj.open;
+    xobj.open = function (method, url, async, user, password) {
+      xhr_open_base.apply(this, arguments);
+      xobj.setRequestHeader("apikey", apikey);
+    }
     xobj.open('GET', url, false);
     xobj.send(null);
     if (xobj.status == "200"){
@@ -206,13 +214,12 @@ _WXTiles = {
     options - {Object} Hashtable of extra options to tag onto the layer.
 	      Any property value can be specified as an option.
 */
-  key: null,
+  apikey: null,
 
-  initialize: function(apikey,options) {
+  initialize: function(options) {
     this._url=_WXROOTURL;
-    this.apikey=apikey;
     extendTo(this,options);
-    this._url=this._url.replace(/\/$/, "")
+    this._url=this._url.replace(/\/$/, "");// + "?apikey=" + this.apikey;
     this._srv=this._url;
     this.lastinit=new Date();
     this._loadinitcount=0;
@@ -226,6 +233,7 @@ _WXTiles = {
     }
     this.times={};
     this._timekey={};
+    this.apikey=(options && options.apikey) ? options.apikey : undefined;
     this.alpha=(options && options.alpha) ? options.alpha : {};
     this.meta={};
     this.alltimes=[];
@@ -234,7 +242,7 @@ _WXTiles = {
     this._loadinit();
   },
   _loadinit: function(){
-    obj=jsonload(_WXROOTURL+'layer');
+    obj=jsonload(_WXROOTURL+'layer', this.apikey);
     this._init(obj);
   },
   _init: function(datalist){
@@ -265,8 +273,8 @@ _WXTiles = {
         this.layerid[a]=new_ids[ids];
         this.instid[a]=instances.pop()['id'];
         this.defalpha[a]=LAYER_DEFALPHA[a];
-        this.times[a]=jsonload(_WXROOTURL+'layer/'+this.layerid[a]+'/instance/'+this.instid[a]+'/times/');
-	    var server=_WXROOTURL;
+        this.times[a]=jsonload(_WXROOTURL+'layer/'+this.layerid[a]+'/instance/'+this.instid[a]+'/times/', this.apikey);
+	      var server=_WXROOTURL;
         for (v in this.views) {
           this._serverlist[v]=server;
           this._cyclelist[v]=this.instid[v];
@@ -369,7 +377,7 @@ _WXTiles = {
   addColorBar: function(size,orient,position){
     var thesize=size ? size : 'small'
     var theorient=orient ? orient : 'horizontal'
-    this.colorBar=new WXColorBar({size:thesize,orientation:theorient,location:position});
+    this.colorBar=new WXColorBar({size:thesize,orientation:theorient,location:position,apikey:this.apikey});
     if (this.map) {
         this.colorBar.addToMap(this.map);
     }
@@ -478,7 +486,7 @@ _WXTiles = {
 
      Parameters:
      aview {String/Boolean}	Get times for view aview. To get times for all, omit or set to false
-     link {Boolean}		nclude times from linked layers
+     link {Boolean}	Include times from linked layers
 
      Returns:
      {Object} A hash of key:value pairs
@@ -733,6 +741,7 @@ _WXColorBar = {
     location:null,
     mpos:['TopRight','TopLeft','BottomRight','BottomLeft'],
     cview:null,
+    apikey:null,
 /*
     Constructor: WXColorBar
 
@@ -746,7 +755,7 @@ _WXColorBar = {
 */
     initialize: function(options){
       extendTo(this,options);
-      this.imurl=_WXROOTURL+'legend/{v}/{s}/'+this.size+'/'+this.orientation+'.png';
+      this.imurl=_WXROOTURL+'legend/{v}/{s}/'+this.size+'/'+this.orientation+'.png?apikey='+this.apikey;
     },
 /*
     Method: update
@@ -817,7 +826,7 @@ if (typeof(OpenLayers)!="undefined"){
               var zmod=Math.pow(2,z);
               x=((x%zmod)+zmod)%zmod;
               var y = Math.round((bounds.bottom - this.tileOrigin.lat) / (res * this.tileSize.h));
-                 return this._srv+'tile/'+this.layerid[this.cview]+"/"+this.styles[this.cview]+"/"+this.instid[this.cview]+"/"+this.strtime+"/0/"+z + "/" + x + "/" + y + this.ext;
+                 return this._srv+'tile/'+this.layerid[this.cview]+"/"+this.styles[this.cview]+"/"+this.instid[this.cview]+"/"+this.strtime+"/0/"+z + "/" + x + "/" + y + this.ext + "?apikey=" + this.apikey;
             } else {
               return this._url+"/images/none.png";
             }
@@ -934,7 +943,7 @@ else if (typeof(google)!="undefined"){
                 //convert google tile format into server format
                 var zmod=Math.pow(2,z);
                 var y=zmod-1-pos.y
-                return this._srv+'tile/'+this.layerid[this.cview]+"/"+this.styles[this.cview]+"/"+this.instid[this.cview]+"/"+this.strtime+"/0/"+z + "/" + x + "/" + y + this.ext;
+                return this._srv+'tile/'+this.layerid[this.cview]+"/"+this.styles[this.cview]+"/"+this.instid[this.cview]+"/"+this.strtime+"/0/"+z + "/" + x + "/" + y + this.ext + "?apikey=" + this.apikey;
             } else {
               return this._url+"/images/none.png";
             }
