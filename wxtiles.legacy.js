@@ -1,7 +1,7 @@
 /*
-About: WXTiles API
-Title: WXTiles API
-Version: 2.0
+About: WXTiles legacy Javascript API for v0 WXTiles
+Title: WXTiles legacy Javascript API
+Version: 0.1
 */
 
 var LAYER_IDS={
