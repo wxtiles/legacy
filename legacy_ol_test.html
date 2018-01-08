@@ -13,7 +13,7 @@
     <script src="wxtiles.legacy.js" type="text/javascript" ></script>
     <script>
 			function add_ol_wxtiles(){
-        var apikey = undefined; // <<-- NOTE to be filled in
+        var apikey = 'gregisace'; // <<-- NOTE to be filled in
 				var options = {
 					controls: [],
 					projection: new OpenLayers.Projection("EPSG:900913"),
@@ -25,18 +25,14 @@
 				var map = new OpenLayers.Map('map', options);
 		    var baselayer=new OpenLayers.Layer.OSM();
 
-		    var satoverlay=new WXTiles({apikey:apikey,withnone:true,autoupdate:true,cview:'none',vorder:['none','satir','satenh']});
 		    var wxoverlay=new WXTiles({apikey:apikey,withnone:true,autoupdate:true,cview:'rain',vorder:['rain','wind','tmp','hs','tp','sst']});
 		    map.addLayers([baselayer]);
 		    wxoverlay.addToMap(map);
-		    satoverlay.addToMap(map);
 		    wxoverlay.addColorBar('small','horizontal');
 
 		    document.getElementById('tSelect').appendChild(wxoverlay.getTSelect());
 				document.getElementById('wxSelect').appendChild(wxoverlay.getVSelect());
-				document.getElementById('satSelect').appendChild(satoverlay.getVSelect());
-
-		    wxoverlay.linkTime(satoverlay);
+			
 
 				map.addControl(new OpenLayers.Control.PanZoomBar());
 				map.addControl(new OpenLayers.Control.NavToolbar());
@@ -57,7 +53,6 @@
     <form name="map_controls">
     <span id="tSelect"></span>
     <span id="wxSelect"><label for="wx_vSelect">Forecast:</label></span>
-    <span id="satSelect"><label for="sat_vSelect">Satellite:</label></span>
     </form>
   </div>
   <div id="map"></div>
